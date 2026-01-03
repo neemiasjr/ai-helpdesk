@@ -12,12 +12,19 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 class TicketService
 {
     public function __construct(
-        private TicketRepositoryInterface $ticketRepository
+        private TicketRepositoryInterface $ticketRepository,
+        private SearchService $searchService
     ) {
     }
 
     public function listTicketsForUser(User $user, array $filters = [], int $perPage = 10): LengthAwarePaginator
     {
+        // Preparar termos de busca (tokenizar e expandir se necessário)
+        if (isset($filters['q']) && !empty($filters['q'])) {
+            $searchTerms = $this->searchService->prepareSearchTerms($filters['q']);
+            $filters['search_terms'] = $searchTerms;
+        }
+
         $tickets = $this->ticketRepository->paginateForUser($user, $filters, $perPage);
 
         // Adicionar sumarizações aos tickets

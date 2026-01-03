@@ -39,9 +39,43 @@ class TicketRepository implements TicketRepositoryInterface
               ->limit(1);
         }]);
 
-        // Filtro de busca por título
+        // Busca inteligente em múltiplos campos
         if (isset($filters['q']) && !empty($filters['q'])) {
-            $query->where('title', 'like', "%{$filters['q']}%");
+            // Se houver termos preparados (tokenizados/expandidos), usar eles
+            if (isset($filters['search_terms']) && !empty($filters['search_terms'])) {
+                $searchTerms = $filters['search_terms'];
+                
+                // Busca AND: todas as palavras devem estar presentes (em qualquer campo)
+                $query->where(function ($q) use ($searchTerms) {
+                    foreach ($searchTerms as $term) {
+                        $term = trim($term);
+                        if (empty($term)) {
+                            continue;
+                        }
+                        
+                        // Cada palavra deve aparecer em pelo menos um campo (OR entre campos)
+                        $q->where(function ($subQuery) use ($term) {
+                            $subQuery->where('title', 'like', "%{$term}%")
+                                ->orWhere('description', 'like', "%{$term}%")
+                                ->orWhere('category', 'like', "%{$term}%")
+                                ->orWhereHas('comments', function ($commentQuery) use ($term) {
+                                    $commentQuery->where('body', 'like', "%{$term}%");
+                                });
+                        });
+                    }
+                });
+            } else {
+                // Fallback: busca simples pela query original
+                $searchTerm = trim($filters['q']);
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->where('title', 'like', "%{$searchTerm}%")
+                        ->orWhere('description', 'like', "%{$searchTerm}%")
+                        ->orWhere('category', 'like', "%{$searchTerm}%")
+                        ->orWhereHas('comments', function ($commentQuery) use ($searchTerm) {
+                            $commentQuery->where('body', 'like', "%{$searchTerm}%");
+                        });
+                });
+            }
         }
 
         // Filtro por status

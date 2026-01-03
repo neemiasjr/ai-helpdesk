@@ -83,4 +83,15 @@ return [
         'temperature' => (float) env('AI_TEMPERATURE', 0.2),
         'max_tokens' => (int) env('AI_MAX_TOKENS', 2000),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Search Expansion
+    |--------------------------------------------------------------------------
+    |
+    | Enable AI-powered search term expansion
+    | This will use AI to generate related terms and synonyms for better search results
+    | Even when disabled, the search will tokenize queries into individual words
+    */
+    'search_expansion_enabled' => env('AI_SEARCH_EXPANSION_ENABLED', true),
 ];
