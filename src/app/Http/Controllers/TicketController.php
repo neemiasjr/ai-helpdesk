@@ -2,40 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Tickets\StoreTicketRequest;
+use App\Http\Requests\Tickets\UpdateTicketRequest;
 use App\Models\Ticket;
+use App\Services\TicketService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class TicketController extends Controller
 {
+    public function __construct(
+        private TicketService $ticketService
+    ) {
+    }
+
     public function index(Request $request)
     {
-        $query = Ticket::query()->with(['creator', 'assignee', 'aiRuns' => function ($q) {
-            $q->where('run_type', 'summarize')
-              ->where('status', 'success')
-              ->latest()
-              ->limit(1);
-        }]);
+        $filters = [
+            'q' => $request->string('q')->toString(),
+        ];
 
-        if ($s = $request->string('q')->toString()) {
-            $query->where('title', 'like', "%{$s}%");
-        }
-
-        if ($request->user()->hasRole('customer')) {
-            $query->where('created_by', $request->user()->id);
-        }
-
-        $tickets = $query->latest()->paginate(10)->withQueryString();
-
-        // Adicionar sumarizações aos tickets
-        $tickets->getCollection()->transform(function ($ticket) {
-            $summarizeRun = $ticket->aiRuns->first();
-            $ticket->summary = $summarizeRun?->response;
-            return $ticket;
-        });
+        $tickets = $this->ticketService->listTicketsForUser($request->user(), $filters, 10);
 
         return Inertia::render('Tickets/Index', [
-            'filters' => ['q' => $request->string('q')->toString()],
+            'filters' => $filters,
             'tickets' => $tickets,
         ]);
     }
@@ -47,21 +37,9 @@ class TicketController extends Controller
         return Inertia::render('Tickets/Create');
     }
 
-    public function store(Request $request)
+    public function store(StoreTicketRequest $request)
     {
-        $this->authorize('create', Ticket::class);
-
-        $data = $request->validate([
-            'title' => ['required','string','max:200'],
-            'description' => ['required','string','max:20000'],
-        ]);
-
-        $ticket = Ticket::create([
-            ...$data,
-            'created_by' => $request->user()->id,
-            'status' => 'open',
-            'priority' => 'medium',
-        ]);
+        $ticket = $this->ticketService->createTicket($request->user(), $request->validated());
 
         return redirect()->route('tickets.show', $ticket);
     }
@@ -70,7 +48,7 @@ class TicketController extends Controller
     {
         $this->authorize('view', $ticket);
 
-        $ticket->load(['creator','assignee','comments.author','aiRuns']);
+        $ticket = $this->ticketService->findTicketWithRelations($ticket->id);
 
         return Inertia::render('Tickets/Show', [
             'ticket' => $ticket,
@@ -90,19 +68,9 @@ class TicketController extends Controller
         ]);
     }
 
-    public function update(Request $request, Ticket $ticket)
+    public function update(UpdateTicketRequest $request, Ticket $ticket)
     {
-        $this->authorize('update', $ticket);
-
-        $data = $request->validate([
-            'title' => ['required','string','max:200'],
-            'description' => ['required','string','max:20000'],
-            'status' => ['required','in:open,in_progress,resolved,closed'],
-            'priority' => ['required','in:low,medium,high,urgent'],
-            'category' => ['nullable','string','max:120'],
-        ]);
-
-        $ticket->update($data);
+        $this->ticketService->updateTicket($ticket, $request->validated());
 
         return redirect()->route('tickets.show', $ticket);
     }

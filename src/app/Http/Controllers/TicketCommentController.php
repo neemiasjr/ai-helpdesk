@@ -2,25 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Tickets\StoreTicketCommentRequest;
 use App\Models\Ticket;
-use App\Models\TicketComment;
-use Illuminate\Http\Request;
+use App\Services\TicketCommentService;
 
 class TicketCommentController extends Controller
 {
-    public function store(Request $request, Ticket $ticket)
+    public function __construct(
+        private TicketCommentService $commentService
+    ) {
+    }
+
+    public function store(StoreTicketCommentRequest $request, Ticket $ticket)
     {
-        $this->authorize('view', $ticket);
-
-        $data = $request->validate([
-            'body' => ['required','string','max:10000'],
-        ]);
-
-        TicketComment::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $request->user()->id,
-            'body' => $data['body'],
-        ]);
+        $this->commentService->createComment($ticket, $request->user(), $request->validated()['body']);
 
         return back();
     }
